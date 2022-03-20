@@ -6,20 +6,18 @@ use File::Copy;
 use FindBin qw($Bin $Script);
 
 use lib "$Bin/../lib";
-require "Outspam.pm";
+use Outspam qw (read_config);
+
+my $conf = {
+  'queue_dir' => '',
+  'hold_queue_dir' => '',
+  'access_lock_msg'=> 'ERROR:450: 4.3.2 Service temporarilly unavailable for suspicious user activity',
+  'access_file' => '',
+  'access_update_cmd' => '',
+ };
 
 my $config_file = "$Bin/../etc/outspam.conf";
-
-my $QUEUE_DIR;
-my $HOLD_QUEUE_DIR;
-my $ACCESS_FILE;
-my $ACCESS_LOCK_MSG='ERROR:450: 4.3.2 Service temporarilly unavailable for suspicious user activity';
-my $ACCESS_UPDATE_CMD="/usr/local/bin/mkaccessdb";
-
-Outspam::config($config_file) if ( -f $config_file ) or die "Config file $config_file not found";
-
-print "ACCESS_FILE=$ACCESS_FILE\n";
-die;
+read_config($config_file,$conf);
 
 my @actions = qw ( USER_LOCK USER_UNLOCK );
 
@@ -36,17 +34,17 @@ access_file($user,$action);
 
 my @user_msgs;
 if ( $action eq 'USER_LOCK' && $option eq 'with-queue' ) {
-    if ( select_msgs($QUEUE_DIR,$user,\@user_msgs) ) {
-        mv_msgs($QUEUE_DIR,$HOLD_QUEUE_DIR,\@user_msgs);
+    if ( select_msgs($conf->{'queue_dir'},$user,\@user_msgs) ) {
+        mv_msgs($conf->{'queue_dir'},$conf->{'hold_queue_dir'},\@user_msgs);
     }    
 }    
 elsif ( $action eq 'USER_UNLOCK' ) {
-    if ( select_msgs($HOLD_QUEUE_DIR,$user,\@user_msgs) ) {
+    if ( select_msgs($conf->{'hold_queue_dir'},$user,\@user_msgs) ) {
         if ( $option eq 'with-queue' ) {
-            mv_msgs($HOLD_QUEUE_DIR,$QUEUE_DIR,\@user_msgs);
+            mv_msgs($conf->{'hold_queue_dir'},$conf->{'queue_dir'},\@user_msgs);
         }
         else {
-            rm_msgs($HOLD_QUEUE_DIR,\@user_msgs);
+            rm_msgs($conf->{'hold_queue_dir'},\@user_msgs);
         }    
     }    
 }    
@@ -56,8 +54,8 @@ sub access_file {
     my $f;
     my $access_content="";
     my $user_found;
-    if ( -f $ACCESS_FILE ) {
-       open ($f, '<', $ACCESS_FILE) or die "Could not open \"$ACCESS_FILE\": $!";
+    if ( -f $conf->{'access_file'} ) {
+       open ($f, '<', $conf->{'access_file'}) or die "Could not open \"$conf->{'access_file'}\": $!";
        while ( readline($f) ) {
            if ( /^From:$user\s/ ) { $user_found = 1; }    
            else { chomp; $access_content .= "$_\n"; }
@@ -65,11 +63,11 @@ sub access_file {
        close $f;
     }
     if ( $action eq 'USER_LOCK' || $action eq 'USER_UNLOCK') {
-       open ($f, '>', $ACCESS_FILE) or die "Could not write to \"$ACCESS_FILE\": $!";
+       open ($f, '>', $conf->{'access_file'}) or die "Could not write to \"$conf->{'access_file'}\": $!";
        print $f $access_content if $access_content;
-       print $f "From:$user $ACCESS_LOCK_MSG\n" if ( $action eq 'USER_LOCK' );
+       print $f "From:$user $conf->{'access_lock_msg'}\n" if ( $action eq 'USER_LOCK' );
        close $f;
-       system($ACCESS_UPDATE_CMD) == 0 or die "\"$ACCESS_UPDATE_CMD\" failed";
+       system($conf->{'access_update_cmd'}) == 0 or die "\"$conf->{'access_update_cmd'}\" failed";
     }    
 }    
 

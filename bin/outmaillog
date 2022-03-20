@@ -72,7 +72,7 @@ while ( <$f> ) {
        $mail{$msg}->{'stat'}=stat_simplify($6);
        $mail{$msg}->{'stat'} = "Sent" if $mail{$msg}->{'stat'} =~ /^Sent /;
        $cur_last_msg = $msg;
-       print "$msg ",Dumper $mail{$msg};
+       #       print "$msg ",Dumper $mail{$msg};
     }    
 }
 close $f;
