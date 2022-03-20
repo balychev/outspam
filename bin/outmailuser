@@ -1,0 +1,136 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+use File::Copy;
+use FindBin qw($Bin $Script);
+
+use lib "$Bin/../lib";
+require "Outspam.pm";
+
+my $config_file = "$Bin/../etc/outspam.conf";
+
+my $QUEUE_DIR;
+my $HOLD_QUEUE_DIR;
+my $ACCESS_FILE;
+my $ACCESS_LOCK_MSG='ERROR:450: 4.3.2 Service temporarilly unavailable for suspicious user activity';
+my $ACCESS_UPDATE_CMD="/usr/local/bin/mkaccessdb";
+
+Outspam::config($config_file) if ( -f $config_file ) or die "Config file $config_file not found";
+
+print "ACCESS_FILE=$ACCESS_FILE\n";
+die;
+
+my @actions = qw ( USER_LOCK USER_UNLOCK );
+
+my $action;
+my $option="";
+my $user;
+
+($action, $option, $user) = argv();
+
+#print "action = $action\n" if defined $action;
+#print "options = $option\n" if defined $option;
+
+access_file($user,$action);
+
+my @user_msgs;
+if ( $action eq 'USER_LOCK' && $option eq 'with-queue' ) {
+    if ( select_msgs($QUEUE_DIR,$user,\@user_msgs) ) {
+        mv_msgs($QUEUE_DIR,$HOLD_QUEUE_DIR,\@user_msgs);
+    }    
+}    
+elsif ( $action eq 'USER_UNLOCK' ) {
+    if ( select_msgs($HOLD_QUEUE_DIR,$user,\@user_msgs) ) {
+        if ( $option eq 'with-queue' ) {
+            mv_msgs($HOLD_QUEUE_DIR,$QUEUE_DIR,\@user_msgs);
+        }
+        else {
+            rm_msgs($HOLD_QUEUE_DIR,\@user_msgs);
+        }    
+    }    
+}    
+
+sub access_file {
+    (my $user, my $action) = @_;
+    my $f;
+    my $access_content="";
+    my $user_found;
+    if ( -f $ACCESS_FILE ) {
+       open ($f, '<', $ACCESS_FILE) or die "Could not open \"$ACCESS_FILE\": $!";
+       while ( readline($f) ) {
+           if ( /^From:$user\s/ ) { $user_found = 1; }    
+           else { chomp; $access_content .= "$_\n"; }
+       }    
+       close $f;
+    }
+    if ( $action eq 'USER_LOCK' || $action eq 'USER_UNLOCK') {
+       open ($f, '>', $ACCESS_FILE) or die "Could not write to \"$ACCESS_FILE\": $!";
+       print $f $access_content if $access_content;
+       print $f "From:$user $ACCESS_LOCK_MSG\n" if ( $action eq 'USER_LOCK' );
+       close $f;
+       system($ACCESS_UPDATE_CMD) == 0 or die "\"$ACCESS_UPDATE_CMD\" failed";
+    }    
+}    
+
+
+sub mv_msgs {
+   (my $src, my $dst, my $msgs) = @_;
+   my $moved = 0;
+   foreach my $fname (@$msgs) {
+      move ("$src/qf$fname", "$dst/qf$fname") or warn "Could not move file \"$src/qf$fname\": $!";
+      move ("$src/df$fname", "$dst/df$fname") or warn "Could not move file \"$src/df$fname\": $!";
+      $moved++;
+   }
+   return $moved;   
+}    
+
+sub rm_msgs {
+   (my $dir, my $msgs) = @_;
+   foreach my $fname (@$msgs) {
+      unlink ("$dir/qf$fname") or warn "Could not remove file \"$dir/qf$fname\": $!";
+      unlink ("$dir/df$fname") or warn "Could not remove file \"$dir/qf$fname\": $!";
+   }    
+}    
+
+sub select_msgs {
+  (my $dir, my $user, my $user_msgs) = @_;
+  opendir (my $dh, $dir) or die "Could not access directory \"$dir\"";
+  my @msgs =  grep { /^qf.*/ && -f "$dir/$_" } readdir($dh);
+  closedir $dh;
+  my @user_msgs;
+  foreach my $fname (@msgs) {
+      open (my $f, '<', "$dir/$fname") or die "Could not open \"$dir/$fname\": $!";
+         while ( readline($f) ) {
+            if ( /^S<(.*)\@/ ) {
+               push (@$user_msgs, substr($fname,2)) if ( $1 eq $user );
+               last; 
+            }
+         }
+      close($f);
+  }
+  return scalar(@$user_msgs);
+}    
+
+
+sub argv {
+   foreach my $a (@ARGV) {
+      $action = "USER_LOCK" if $a =~ /^--?l(?:ock)?$/; 
+      $action = "help" if $a =~ /^--?h(?:elp)?$/; 
+      if ( $a =~ /^--*u(q)?(?:nlock)?/ ) {
+         $action = "USER_UNLOCK" if $a =~ /^--*u(q)?(?:nlock)?$/;
+         $option = "with-queue" if $1;
+      }
+      $option = "with-queue" if $a =~ /^-q$|^--with-queue$/;
+      $user = $a if $a =~ /^\w+$/;
+   }
+   help() unless defined($action) && defined($user);
+   return ($action,$option,$user);
+}
+
+
+sub help {
+    print "Locks and unlocks user outgoing mail\n";
+    print "usage: $0 {-l|--lock|-u|--unlock} [-q|--with-queue] user\n";
+    exit;
+}    
