@@ -5,6 +5,8 @@ use strict;
 use Data::Dumper;
 use DBI;
 use FindBin qw($Bin $Script);
+use Daemon::Generic;
+
 
 use lib "$Bin/../lib";
 use Outspam;
@@ -21,52 +23,75 @@ my $conf = {
 
 
 my $verbose = grep (/--verbose/, @ARGV) ? 1 : 0;
+my $nodetach = grep (/--nodetach$/, @ARGV) ? 1 : 0;
 
 my $config_file = "$Bin/../etc/outspam.conf";
 read_config($config_file,$conf);
 
 my $conn = db_connect($conf);
 
-(my $init, my $f) = initproc($conf);
+newdaemon(
+            progname        => 'imaplogd',
+            pidfile         => '/home/eu/tmp/imaplog.pid',
+            configfile      => '/home/eu/src/outspam/etc/outspam.conf',
+     );
 
 
+sub gd_run
+     {
+         while(1) {
+               sleep(5);
+               proc_main($conf);              
+            }
+     }
 
-my %mail;
-my @msgid;
-
-my $cur_last_msg;
-while ( <$f> ) {
-    next unless / User logged in /;
-    if ( /^(\w+) (\d+) (\S+) \S+ \w+\[(\d+)\]: .+ \[([\d+\.]+)\] (\w+) / ) {
-       my $id = $4;
-       if ( defined $init->{'bm_end'} ) {
-          undef $init->{'bm_end'} if $init->{'bm_end'} eq $id;
-          next;
-       }    
-       $mail{$id}->{'time'} = date2sec($3,$2,$1,$init);
-       $mail{$id}->{'host'} = $5;
-       $mail{$id}->{'user'} = $6;
-       $cur_last_msg = $id; 
-       print "$id ",Dumper $mail{$id} if $verbose;
-    }    
-}
-close $f;
-
-
-exit 0 unless defined $cur_last_msg;
-
-foreach my $k (keys(%mail)) {
-# print "$k ",Dumper $mail{$k};
-   my $query_str = mk_ins_query($k,$mail{$k});
-   if ( $query_str ) {
-      my $query = $conn->prepare($query_str);
-      $query->execute() or query_err($conn,$query_str); 
-   }   
-}    
-
-wbookmark($conf,$init,$cur_last_msg);
+#daemonize() unless $nodetach;
+#daemonize();
+     #my $continue = 1;
+#$SIG{TERM} = sub { $continue = 0 };
+#my $count = 0;
+#while ( $continue ) {
+#  $count++;
+#  system("touch /home/eu/tmp/a$count.test");
+#  proc_main($conf);
+#  sleep 5;
+  #  last if $nodetach;
+  #}
 
 # ====================================================
+
+sub proc_main {
+    my $conf = shift;
+    (my $init, my $f) = initproc($conf);
+    my %mail;
+    my $cur_last_msg;
+    while ( <$f> ) {
+        next unless / User logged in /;
+        if ( /^(\w+) (\d+) (\S+) \S+ \w+\[(\d+)\]: .+ \[([\d+\.]+)\] (\w+) / ) {
+           my $id = $4;
+           if ( defined $init->{'bm_end'} ) {
+              undef $init->{'bm_end'} if $init->{'bm_end'} eq $id;
+              next;
+           }    
+           $mail{$id}->{'time'} = date2sec($3,$2,$1,$init);
+           $mail{$id}->{'host'} = $5;
+           $mail{$id}->{'user'} = $6;
+           $cur_last_msg = $id; 
+           print "$id ",Dumper $mail{$id} if $verbose;
+        }    
+    }
+    close $f;
+    return unless defined $cur_last_msg;
+    foreach my $k (keys(%mail)) {
+    # print "$k ",Dumper $mail{$k};
+       my $query_str = mk_ins_query($k,$mail{$k});
+       if ( $query_str ) {
+          my $query = $conn->prepare($query_str);
+          $query->execute() or query_err($conn,$query_str); 
+       }   
+    }    
+    wbookmark($conf,$init,$cur_last_msg);
+}    
 
 sub mk_ins_query {
     (my $msg, my $h) = @_;
