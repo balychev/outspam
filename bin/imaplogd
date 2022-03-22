@@ -31,7 +31,8 @@ read_config($config_file,$conf);
 my $conn = db_connect($conf);
 
 newdaemon(
-            configfile      => '/home/eu/src/outspam/etc/outspam.conf',
+            pidfile => $conf->{'imalogd_pid_file'},
+            configfile => $config_file,
      );
 
 
