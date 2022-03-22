@@ -15,6 +15,7 @@ my $conf = {
   'domain' => '',
   'mynet' => '',
   'imap_bookmark'=> '',
+  'imap_pid_file' => '',
   'firewall_action'=> '',
   'db' => '',
   'dbhost' => '',
@@ -31,7 +32,7 @@ read_config($config_file,$conf);
 my $conn = db_connect($conf);
 
 newdaemon(
-            pidfile => $conf->{'imalogd_pid_file'},
+            pidfile => $conf->{'imap_pid_file'},
             configfile => $config_file,
      );
 
