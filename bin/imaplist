@@ -1,0 +1,38 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use DBI;
+use FindBin qw($Bin $Script);
+
+use lib "$Bin/../lib";
+use Outspam;
+
+my $conf = {
+  'domain' => '',
+  'mynet' => '',
+  'db' => '',
+  'dbhost' => '',
+  'dbuser'=> '',
+  'dbpassword' => '',
+  'smtp_open_ttl' => 86400,
+};
+
+my $verbose = grep (/--verbose/, @ARGV) ? 1 : 0;
+
+my $config_file = "$Bin/../etc/outspam.conf";
+read_config($config_file,$conf);
+
+my $conn = db_connect($conf);
+
+my $qstr = "select host from imaplog where time > " .time(). " - $conf->{'smtp_open_ttl'}";
+my $q = $conn->prepare($qstr);
+$q->execute() or query_err($conn,$qstr);
+
+while ( my $ip = ($q->fetchrow_array())[0] ) {
+    #print "$ip\n" unless in_netblock($ip,$conf->{'mynet'});
+    print "$ip\n" unless in_mynet($ip,$conf);
+}    
+
+
