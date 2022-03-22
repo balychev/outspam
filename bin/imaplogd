@@ -7,14 +7,15 @@ use DBI;
 use FindBin qw($Bin $Script);
 use Daemon::Generic;
 
-
 use lib "$Bin/../lib";
 use Outspam;
 
 my $conf = {
   'imaplog' => '',
   'domain' => '',
+  'mynet' => '',
   'imap_bookmark'=> '',
+  'firewall_action'=> '',
   'db' => '',
   'dbhost' => '',
   'dbuser'=> '',
@@ -23,7 +24,6 @@ my $conf = {
 
 
 my $verbose = grep (/--verbose/, @ARGV) ? 1 : 0;
-my $nodetach = grep (/--nodetach$/, @ARGV) ? 1 : 0;
 
 my $config_file = "$Bin/../etc/outspam.conf";
 read_config($config_file,$conf);
@@ -31,8 +31,6 @@ read_config($config_file,$conf);
 my $conn = db_connect($conf);
 
 newdaemon(
-            progname        => 'imaplogd',
-            pidfile         => '/home/eu/tmp/imaplog.pid',
             configfile      => '/home/eu/src/outspam/etc/outspam.conf',
      );
 
@@ -44,19 +42,6 @@ sub gd_run
                proc_main($conf);              
             }
      }
-
-#daemonize() unless $nodetach;
-#daemonize();
-     #my $continue = 1;
-#$SIG{TERM} = sub { $continue = 0 };
-#my $count = 0;
-#while ( $continue ) {
-#  $count++;
-#  system("touch /home/eu/tmp/a$count.test");
-#  proc_main($conf);
-#  sleep 5;
-  #  last if $nodetach;
-  #}
 
 # ====================================================
 
@@ -74,9 +59,14 @@ sub proc_main {
               next;
            }    
            $mail{$id}->{'time'} = date2sec($3,$2,$1,$init);
-           $mail{$id}->{'host'} = $5;
+           my $host = $mail{$id}->{'host'} = $5;
            $mail{$id}->{'user'} = $6;
            $cur_last_msg = $id; 
+           unless ( in_mynet($host,$conf) ) {
+              my $action = $conf->{'firewall_action'};
+              $action =~ s/%/$host/;
+              print "system( $action )\n";
+           }    
            print "$id ",Dumper $mail{$id} if $verbose;
         }    
     }

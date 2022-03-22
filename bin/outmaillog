@@ -63,6 +63,7 @@ exit 0 unless $cur_last_msg;
 foreach my $k (sort keys(%mail)) {
    next unless $mail{$k}->{'rcpt'};
    #print "$k ",Dumper $mail{$k};
+   $conn->quote($mail{$k}->{'stat'});
    my $query_str = mk_ins_query($k,$mail{$k});
    if ( $query_str ) {
       my $query = $conn->prepare($query_str);
@@ -85,13 +86,9 @@ sub stat_simplify {
 sub mk_ins_query {
     (my $msg, my $h) = @_;
     my $q = "";
-    #  print Dumper(%$h);
     foreach my $k (keys (%$h)) {
         $q .= ", " if $q;
-        if ( $k eq 'stat' ) {
-           $q .= "$k=QUOTE(\'$h->{$k}\')"
-        }
-        else { $q .= "$k=\'$h->{$k}\'"; }
+        $q .= "$k=\'$h->{$k}\'";
     }
     $q = "insert ignore maillog set msg=\'$msg\', ".$q if $q;
     return $q;

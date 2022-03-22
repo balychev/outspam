@@ -4,10 +4,12 @@ use warnings;
 use strict;
 use DBI;
 use Time::Local;
+use Net::Netmask;
 
 use base qw(Exporter);
 
-our @EXPORT = qw ( initproc db_connect read_config date2sec rbookmark wbookmark query_err daemonize );
+our @EXPORT = qw ( initproc db_connect read_config date2sec rbookmark
+                   wbookmark query_err daemonize in_mynet in_netblock );
 #our @EXPORT = qw ( * );
 
 sub read_config {
@@ -18,12 +20,17 @@ sub read_config {
    while ( readline($f) ) {
        if ( /^\s*([a-z\_]+)\s+(.+)$/ ) {
           if ( defined $conf->{$1} ) {  
-             $conf_line = "\$conf->{'". $1 . "'} = '" . $2 . "'";
+             my $name = $1; my $val = $2;
+             $conf_line = "\$conf->{\'$1\'} = \'$2\'";
              eval "$conf_line\n";
           }   
        }    
    }
    close($f);   
+
+   $conf->{'mynet'} = [ split(/\s*,\s*/,$conf->{'mynet'}) ];
+   $conf->{'mynet'} = [ map { Net::Netmask->new2($_) } @{$conf->{'mynet'}} ]; 
+
    foreach (keys(%$conf)) {
       die "\"$_\" config parameter not found or empty" if $conf->{$_} eq '';  
    }        
@@ -103,5 +110,15 @@ sub rbookmark {
      undef $init->{'bm_end'};
   }         
 }
+
+sub in_netblock {
+   (my $ip, my $netblocks = []) = @_;
+   return grep { $_ > 0 } map { $_->match($ip) } (@$netblocks);
+}    
+
+sub in_mynet {
+    (my $ip, my $conf) = @_;
+    return grep { $_ > 0 } map { $_->match($ip) } (@{$conf->{'mynet'}});
+}    
 
 1;
