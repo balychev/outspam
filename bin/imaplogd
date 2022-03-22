@@ -67,7 +67,7 @@ sub proc_main {
            unless ( in_mynet($host,$conf) ) {
               my $action = $conf->{'firewall_action'};
               $action =~ s/%/$host/;
-              print "system( $action )\n";
+              system( $action );
            }    
            print "$id ",Dumper $mail{$id} if $verbose;
         }    
