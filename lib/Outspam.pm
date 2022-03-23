@@ -28,8 +28,10 @@ sub read_config {
    }
    close($f);   
 
-   $conf->{'mynet'} = [ split(/\s*,\s*/,$conf->{'mynet'}) ];
-   $conf->{'mynet'} = [ map { Net::Netmask->new2($_) } @{$conf->{'mynet'}} ]; 
+   if ( $conf->{'mynet'} ) {
+      $conf->{'mynet'} = [ split(/\s*,\s*/,$conf->{'mynet'}) ];
+      $conf->{'mynet'} = [ map { Net::Netmask->new2($_) } @{$conf->{'mynet'}} ]; 
+   }    
 
    foreach (keys(%$conf)) {
       die "\"$_\" config parameter not found or empty" if $conf->{$_} eq '';  
