@@ -15,6 +15,7 @@ my $conf = {
   'domain' => '',
   'outmail_bookmark'=> '',
   'outmail_pid_file'=> '',
+  'ignore_sender' => '',
   'db' => '',
   'dbhost' => '',
   'dbuser'=> '',
@@ -29,6 +30,8 @@ read_config($config_file,$conf);
 my $from_filter = '.+\@' . $conf->{'domain'};
 my $to_filter = '.+\@(?!' . $conf->{'domain'} . ')[^>]+';
 my $conn = db_connect($conf);
+
+#proc_main(); die;
 
 newdaemon(
             pidfile => $conf->{'outmail_pid_file'},
@@ -52,25 +55,33 @@ sub proc_main {
     my $cur_last_msg;
     while ( <$f> ) {
         next unless / sm-mta\[\d+\]: /;
-        my $regex = '^\w+ \d+ (?:\d+:\d+:\d+) \S+ sm-mta\[\d+\]: (\S+): from=<(' .$from_filter. ')>, '.
+        my $regex = '^\w+ \d+ (?:\d+:\d+:\d+) \S+ sm-mta\[\d+\]: (\S+): from=<([^>]+)>, '.
                     'size=(\d+), class=\S+, nrcpts=(\d+), .* relay=[^\[]*\[([\d\.]+)\]';
         if ( /$regex/i ) {
+           my $sndr = lc $2;
+           next if grep { $sndr =~ /$_/ } @{$conf->{'ignore_sender'}};
            my $msg = $1;
            if ( defined $init->{'bm_end'} ) {
               undef $init->{'bm_end'} if $init->{'bm_end'} eq $msg;
               next;
            }    
-           $mail{$msg} = {'sndr'=>lc $2, 'size'=>$3, 'nrcpts'=>$4, 'relay'=>$5 };
+           $mail{$msg} = {'sndr'=>$sndr, 'size'=>$3, 'nrcpts'=>$4, 'relay'=>$5 };
         }    
-        elsif ( /^(\w+) (\d+) (\S+) \S+ \S+ (\S+): to=<($to_filter)>, .* stat=(.*)/i ) {
+        elsif ( /^(\w+) (\d+) (\S+) \S+ \S+ (\S+): to=<([^>]+)>, .* stat=(.*)/i ) {
            my $msg = $4;
            next unless $mail{$msg};
+           my $rcpt = lc $5;
+           my $stat = lc stat_simplify($6);
            $mail{$msg}->{'time'}=date2sec($3,$2,$1,$init);
-           $mail{$msg}->{'rcpt'}=lc $5;
-           $mail{$msg}->{'stat'}=stat_simplify($6);
-           $mail{$msg}->{'stat'} = "Sent" if $mail{$msg}->{'stat'} =~ /^Sent /;
+           $mail{$msg}->{'stat'} = $stat;
+           $mail{$msg}->{'outgo'} = $mail{$msg}->{'sndr'} =~ /$from_filter/ ? 1 : 0;
+           next unless $mail{$msg}->{'outgo'} && $stat ne 'sent';
+           next unless $mail{$msg}->{'outgo'} || $stat eq 'sent';
+           next if $mail{$msg}->{'outgo'} && $rcpt =~ /$from_filter/; 
+           $mail{$msg}->{'rcpt'}=$rcpt;
            $cur_last_msg = $msg;
            print "$msg ",Dumper $mail{$msg} if $verbose;
+
         }    
     }
     close $f;
@@ -79,7 +90,6 @@ sub proc_main {
 
     foreach my $k (sort keys(%mail)) {
        next unless $mail{$k}->{'rcpt'};
-       #print "$k ",Dumper $mail{$k};
        $conn->quote($mail{$k}->{'stat'});
        my $query_str = mk_ins_query($k,$mail{$k});
        if ( $query_str ) {

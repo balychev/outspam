@@ -9,7 +9,7 @@ use Net::Netmask;
 use base qw(Exporter);
 
 our @EXPORT = qw ( initproc db_connect read_config date2sec rbookmark
-                   wbookmark query_err daemonize in_mynet in_netblock );
+                   wbookmark query_err daemonize in_mynet in_netblock sec2date );
 #our @EXPORT = qw ( * );
 
 sub read_config {
@@ -21,7 +21,8 @@ sub read_config {
        if ( /^\s*([a-z\_]+)\s+(.+)$/ ) {
           if ( defined $conf->{$1} ) {  
              my $name = $1; my $val = $2;
-             $conf_line = "\$conf->{\'$1\'} = \'$2\'";
+             #             $val = "\'$val\'" unless $name =~ /^[\[\{]/; 
+             $conf_line = "\$conf->{\'$name\'} = $val";
              eval "$conf_line\n";
           }   
        }    
@@ -32,6 +33,16 @@ sub read_config {
       $conf->{'mynet'} = [ split(/\s*,\s*/,$conf->{'mynet'}) ];
       $conf->{'mynet'} = [ map { Net::Netmask->new2($_) } @{$conf->{'mynet'}} ]; 
    }    
+
+   if ( $conf->{'ignore_sender'} ) {
+      $conf->{'ignore_sender'} = [ split(/\s*,\s*/,$conf->{'ignore_sender'}) ];
+   }    
+
+   #   foreach my $k (keys(%$conf)) {
+   #   if ( $conf->{$k} =~ /^\s*([\[\{])(.+)([\]\}])\s*$/ ) {
+   #       eval '$conf->{' .$k. '} = ' . $1$2$3;  
+   #    }    
+   #}        
 
    foreach (keys(%$conf)) {
       die "\"$_\" config parameter not found or empty" if $conf->{$_} eq '';  
@@ -59,6 +70,14 @@ sub initproc {
    }    
    seek($f,0,0);
    return ($init,$f);
+}    
+
+
+sub sec2date {
+   (my $time) = @_; 
+   my @months = qw / Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec /;
+   (my $sec, my $min, my $hou, my $day, my $mon, my $yea) = localtime($time);
+   return sprintf("%3s %-2s %02d:%02d:%02d",$months[$mon+1],$day,$hou,$min,$sec);
 }    
 
 sub date2sec {
