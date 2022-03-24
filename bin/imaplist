@@ -16,7 +16,7 @@ my $conf = {
   'dbhost' => '',
   'dbuser'=> '',
   'dbpassword' => '',
-  'smtp_open_ttl' => 86400,
+  #  'smtp_open_ttl' => 86400,
 };
 
 my $verbose = grep (/--verbose/, @ARGV) ? 1 : 0;
@@ -26,13 +26,13 @@ read_config($config_file,$conf);
 
 my $conn = db_connect($conf);
 
-my $qstr = "select host from imaplog where time > " .time(). " - $conf->{'smtp_open_ttl'}";
+#my $qstr = "select host from imaplog where time > " .time(). " - $conf->{'smtp_open_ttl'}";
+my $qstr = "select time,user,host from imaplog order by time desc";
 my $q = $conn->prepare($qstr);
 $q->execute() or query_err($conn,$qstr);
 
-while ( my $ip = ($q->fetchrow_array())[0] ) {
-    #print "$ip\n" unless in_netblock($ip,$conf->{'mynet'});
-    print "$ip\n" unless in_mynet($ip,$conf);
+while ( my $r = $q->fetchrow_hashref() ) {
+    print sprintf("%15s %15s %s\n",sec2date($r->{'time'}),$r->{'host'},$r->{'user'});
 }    
 
 

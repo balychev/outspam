@@ -10,6 +10,7 @@ use lib "$Bin/../lib";
 use Outspam;
 
 my $conf = {
+  'domain' => '',  
   'db' => '',
   'dbhost' => '',
   'dbuser'=> '',
@@ -26,7 +27,8 @@ my $q = $conn->prepare($qstr);
 $q->execute() or query_err($conn,$qstr);
 
 while ( my $r  = $q->fetchrow_hashref() ) {
-    $r->{'sndr'} =~ s/(.*)\@.*$/$1/;
+    $r->{'sndr'} =~ s/(.*)\@$domain$/$1/;
+    $r->{'rcpt'} =~ s/(.*)\@$domain$/$1/;
     print sprintf("%15s %15s %16s %28s %2d %s\n",
           sec2date($r->{'time'}),$r->{'relay'},$r->{'sndr'},$r->{'rcpt'},$r->{'nrcpts'},$r->{'stat'});
 }    
