@@ -21,9 +21,11 @@ sub read_config {
        if ( /^\s*([a-z\_]+)\s+(.+)$/ ) {
           if ( defined $conf->{$1} ) {  
              my $name = $1; my $val = $2;
-             #             $val = "\'$val\'" unless $name =~ /^[\[\{]/; 
+             $val = "\'$val\'" unless $name =~ /^[\[\{]/; 
              $conf_line = "\$conf->{\'$name\'} = $val";
+             print "line: $conf_line ";
              eval "$conf_line\n";
+             print "ok\n";
           }   
        }    
    }
