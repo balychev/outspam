@@ -65,19 +65,26 @@ sub proc_main {
               undef $init->{'bm_end'} if $init->{'bm_end'} eq $msg;
               next;
            }    
-           $mail{$msg} = {'sndr'=>$sndr, 'size'=>$3, 'nrcpts'=>$4, 'relay'=>$5 };
+           $mail{$msg} = {
+                           'sndr'=>$sndr, 'size'=>$3, 'nrcpts'=>$4, 'relay'=>$5,
+                           'rcpts'=>{}, 'rcount'=>0 
+                         };
+
         }    
         elsif ( /^(\w+) (\d+) (\S+) \S+ \S+ (\S+): to=<([^>]+)>, .* stat=(.*)/i ) {
            my $msg = $4;
            next unless $mail{$msg};
            my $rcpt = lc $5;
            my $stat = lc stat_simplify($6);
-           $mail{$msg}->{'time'}=date2sec($3,$2,$1,$init);
-           $mail{$msg}->{'stat'} = $stat;
+           my $r = $mail{$msg}->{'rcpts'};
+           my $idx = $mail{$msg}->{'rcount'};
+           $r->{$idx}->{'time'}=date2sec($3,$2,$1,$init);
+           $r->{$idx}->{'stat'} = $stat;
            $mail{$msg}->{'outgo'} = $mail{$msg}->{'sndr'} =~ /$from_filter/ ? 1 : 0;
            next unless $mail{$msg}->{'outgo'} || $stat eq 'sent';
-           next if $mail{$msg}->{'outgo'} && $rcpt =~ /$from_filter/; 
-           $mail{$msg}->{'rcpt'}=$rcpt;
+           next if $mail{$msg}->{'outgo'} && $rcpt =~ /$from_filter/;
+           $r->{$idx}->{'rcpt'}=$rcpt;
+           ++$mail{$msg}->{'rcount'};
            $cur_last_msg = $msg;
            print "$msg ",Dumper $mail{$msg} if $verbose;
 
@@ -88,13 +95,19 @@ sub proc_main {
     return unless $cur_last_msg;
 
     foreach my $k (sort keys(%mail)) {
-       next unless $mail{$k}->{'rcpt'};
-       $conn->quote($mail{$k}->{'stat'});
-       my $query_str = mk_ins_query($k,$mail{$k});
-       if ( $query_str ) {
-          my $query = $conn->prepare($query_str);
-          $query->execute() or query_err($conn,$query_str); 
-       }   
+       my $r =  $mail{$k}->{'rcpts'};
+       foreach my $i (sort keys(%$r)) { 
+          next unless $r->{$i}->{'rcpt'};
+          $conn->quote($r->{$i}->{'stat'});
+          foreach (qw (sndr size nrcpts relay)) {
+             $r->{$i}->{$_} = $mail{$k}->{$_}; 
+          }    
+          my $query_str = mk_ins_query($k,$r->{$i});
+          if ( $query_str ) {
+             my $query = $conn->prepare($query_str);
+             $query->execute() or query_err($conn,$query_str); 
+          }
+       }    
     }    
 
     wbookmark($conf,$init,$cur_last_msg);
@@ -117,7 +130,7 @@ sub mk_ins_query {
         $q .= ", " if $q;
         $q .= "$k=\'$h->{$k}\'";
     }
-    $q = "insert ignore maillog set msg=\'$msg\', ".$q if $q;
+    $q = "insert maillog set msg=\'$msg\', ".$q. " on duplicate key update time=$h->{'time'}" if $q;
     return $q;
 }    
 
