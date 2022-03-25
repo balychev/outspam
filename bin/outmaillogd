@@ -69,7 +69,7 @@ sub proc_main {
                            'sndr'=>$sndr, 'size'=>$3, 'nrcpts'=>$4, 'relay'=>$5,
                            'rcpts'=>{}, 'rcount'=>0 
                          };
-
+           $mail{$msg}->{'outgo'} = $mail{$msg}->{'sndr'} =~ /$from_filter/ ? 1 : 0;
         }    
         elsif ( /^(\w+) (\d+) (\S+) \S+ \S+ (\S+): to=<([^>]+)>, .* stat=(.*)/i ) {
            my $msg = $4;
@@ -80,7 +80,6 @@ sub proc_main {
            my $idx = $mail{$msg}->{'rcount'};
            $r->{$idx}->{'time'}=date2sec($3,$2,$1,$init);
            $r->{$idx}->{'stat'} = $stat;
-           $mail{$msg}->{'outgo'} = $mail{$msg}->{'sndr'} =~ /$from_filter/ ? 1 : 0;
            next unless $mail{$msg}->{'outgo'} || $stat eq 'sent';
            next if $mail{$msg}->{'outgo'} && $rcpt =~ /$from_filter/;
            $r->{$idx}->{'rcpt'}=$rcpt;
@@ -99,7 +98,7 @@ sub proc_main {
        foreach my $i (sort keys(%$r)) { 
           next unless $r->{$i}->{'rcpt'};
           $conn->quote($r->{$i}->{'stat'});
-          foreach (qw (sndr size nrcpts relay)) {
+          foreach (qw (sndr size nrcpts relay outgo)) {
              $r->{$i}->{$_} = $mail{$k}->{$_}; 
           }    
           my $query_str = mk_ins_query($k,$r->{$i});
