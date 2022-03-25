@@ -77,7 +77,7 @@ sub sec2date {
    (my $time) = @_; 
    my @months = qw / Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec /;
    (my $sec, my $min, my $hou, my $day, my $mon, my $yea) = localtime($time);
-   return sprintf("%3s %-2s %02d:%02d:%02d",$months[$mon+1],$day,$hou,$min,$sec);
+   return sprintf("%3s %-2s %02d:%02d:%02d",$months[$mon],$day,$hou,$min,$sec);
 }    
 
 sub date2sec {
