@@ -18,6 +18,8 @@ sub read_config {
    open(my $f, '<', $config_file) or die "Could not read \"$config_file\" $!";
    my $conf_line;
    while ( readline($f) ) {
+       s/\#.*//;
+       s/\s+$//; 
        if ( /^\s*([a-z\_]+)\s+(.+)$/ ) {
           if ( defined $conf->{$1} ) {  
              my $name = $1; my $val = "\'$2\'";
@@ -29,14 +31,23 @@ sub read_config {
    }
    close($f);   
 
-   if ( $conf->{'mynet'} ) {
-      $conf->{'mynet'} = [ split(/\s*,\s*/,$conf->{'mynet'}) ];
-      $conf->{'mynet'} = [ map { Net::Netmask->new2($_) } @{$conf->{'mynet'}} ]; 
-   }    
+   for my $p (qw (mynet friendnet)) {
+       if ( $conf->{$p} ) {
+          $conf->{$p} = [ split(/\s*,\s*/,$conf->{$p}) ];
+          $conf->{$p} = [ map { Net::Netmask->new2($_) } @{$conf->{$p}} ]; 
+       }    
+   }
+   for my $p (qw (ignore_sender)) {
+      if ( $conf->{$p} ) {
+         $conf->{$p} = [ split(/\s*,\s*/,$conf->{$p}) ];
+      }
+   }   
 
-   if ( $conf->{'ignore_sender'} ) {
-      $conf->{'ignore_sender'} = [ split(/\s*,\s*/,$conf->{'ignore_sender'}) ];
-   }    
+   for my $p (qw (mistrust msgs_sec sndr_ip_mistrust)) {
+      if ( $conf->{$p} ) {
+         $conf->{$p} = { split(/\s*,\s*|\s/,$conf->{$p}) };
+      }
+   }   
 
    #   foreach my $k (keys(%$conf)) {
    #   if ( $conf->{$k} =~ /^\s*([\[\{])(.+)([\]\}])\s*$/ ) {

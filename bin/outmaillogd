@@ -31,6 +31,8 @@ my $from_filter = '.+\@' . $conf->{'domain'};
 my $to_filter = '.+\@(?!' . $conf->{'domain'} . ')[^>]+';
 my $conn = db_connect($conf);
 
+my %mail;
+
 # proc_main(); die;
 
 newdaemon(
@@ -50,7 +52,6 @@ sub gd_run
 sub proc_main {
     (my $init, my $f) = initproc($conf);
 
-    my %mail;
     my @msgid;
     my $cur_last_msg;
     while ( <$f> ) {
