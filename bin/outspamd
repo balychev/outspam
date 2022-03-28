@@ -2,9 +2,10 @@
 
 use warnings;
 use strict;
-use Data::Dumper;
+#use Data::Dumper;
 use DBI;
 use FindBin qw($Bin $Script);
+use Daemon::Generic;
 
 use lib "$Bin/../lib";
 use Outspam;
@@ -12,6 +13,7 @@ use Outspam;
 my $conf = {
   'domain' => '',
   'mynet' => '',
+  'friendnet' => '',
   'db' => '',
   'dbhost' => '',
   'dbuser'=> '',
@@ -20,6 +22,9 @@ my $conf = {
   'msgs_sec' => '',
   'ignore_sender' => '',
   'sndr_ip_mistrust' => '',
+  'ban_action' => '',
+  'outspam_notify' => '',
+  'outspamd_pid_file' => '',
 };
 
 my $verbose = grep (/--verbose/, @ARGV) ? 1 : 0;
@@ -31,39 +36,49 @@ read_config($config_file,$conf);
 
 my $conn = db_connect($conf);
 
+# msg_sec_test(); die;
 
+newdaemon(
+            pidfile => $conf->{'outspamd_pid_file'},
+            configfile => $config_file,
+     );
 
-msg_sec_test();
+sub gd_run
+     {
+         while(1) {
+               sleep(10);
+               msg_sec_test(); 
+            }
+     }
 
+# ====================================================
 
 sub msg_sec_test {
     foreach my $sec (sort { $a <=> $b } keys %{$conf->{'msgs_sec'}} ) {
-        print "=== $sec\n";
-        my $qstr = "select distinct replace(sndr,\'\@$conf->{'domain'}\',\'\') as sndr, count(rcpt) as nsent ".
-        "from maillog m1 where outgo=1 and unix_timestamp()-m1.time < " .$sec.
-        " and not exists (select * from maillog m2 where m2.sndr=m1.rcpt) and not exists ".
-        "(select * from maillog m3 where m3.rcpt=m1.rcpt and m3.msg != m1.msg and stat=\'sent\') group by sndr";
+        print "=== $sec\n" if $verbose;
+        my $qstr = "select distinct replace(sndr,\'\@$conf->{'domain'}\',\'\') as sndr, count(rcpt) as nsent".
+        " from maillog m1 where outgo=1 and unix_timestamp()-m1.time < " .$sec.
+        " and not exists (select * from maillog m2 where m2.sndr=m1.rcpt and outgo=0)".
+        " and not exists (select * from maillog m3 where m3.rcpt=m1.rcpt and m3.msg != m1.msg and stat=\'sent\' and outgo=1)".
+        " and not exists ( select * from maillog m4 where m1.msg=m4.msg and m1.rcpt=m4.rcpt and m1.stat!=m4.stat and outgo!=-1)".
+        " group by sndr";
 
         my $q = $conn->prepare($qstr);
         $q->execute() or query_err($conn,$qstr);
 
         while ( my $r  = $q->fetchrow_hashref() ) {
-
             my $coef = $conf->{'mistrust'}->{$r->{'sndr'}};
             $coef = 1 unless defined $coef;
-            my $score = $r->{'nsent'} * $coef * sndr_ip_mistrust($r->{'sndr'},$sec); 
-            print "$r->{'sndr'} $r->{'nsent'} \($score\) require $conf->{'msgs_sec'}->{$sec}";
+            my $ip_mistrust = sndr_ip_mistrust($r->{'sndr'},$sec);
+            my $score = $r->{'nsent'} * $coef * $ip_mistrust; 
+            print "$r->{'sndr'} $r->{'nsent'} \($score\) \(ip_mistrust: $ip_mistrust\) require $conf->{'msgs_sec'}->{$sec}" if $verbose;
             if ( $score > $conf->{'msgs_sec'}->{$sec} ) {
-                print " *** ban ***\n";
+               system(subst_percent($conf->{'ban_action'},$r->{'sndr'})) ||  mark_ignore($r->{'sndr'},$sec);
+               system( subst_percent( $conf->{'outspam_notify'}, [ $r->{'sndr'},$r->{'nsent'},$sec ] ) );
             } else { print "\n"; }   
         }
     }    
 }
-
-# вес получателей yahoo большой, а ac.ru маленький. Вообще можно игнорирвоать некоторые адреса
-# рабочее - нерабочее время. Это видно по активности получателей почты.
-# Проводить проверку только убедившись, что очередь свободна или что-то в этом роде (есть входящая почта?)
-# реакция на defer и reject
 
 sub sndr_ip_mistrust {
     (my $sndr, my$sec) = @_;
@@ -75,12 +90,16 @@ sub sndr_ip_mistrust {
 
     my $alien_ip_count = 0;
     while ( my $r  = $q->fetchrow_hashref() ) {
-       $alien_ip_count++ unless in_netblock($r->{'relay'},($conf->{'mynet'},$conf->{'friendnet'}));
+       $alien_ip_count++ unless in_netblock($r->{'relay'},(@{$conf->{'friendnet'}},@{$conf->{'mynet'}}));
     }    
     return $conf->{'sndr_ip_mistrust'}->{'base'} ** $alien_ip_count;
 }    
 
-#sub sndr_ip_test {
-#   select sndr,count(distinct relay) as nrelay from maillog where outgo=1 group by sndr having count(distinct relay) > 1 order by 2 desc; 
-#} 
+sub mark_ignore  {
+    (my $sndr, my $sec ) = @_;
+    my $qstr = "update maillog  set outgo=-1 where outgo=1 and sndr=\'$sndr\@$conf->{'domain'}\'".
+               " and unix_timestamp()-time < " .$sec;
+    my $q = $conn->prepare($qstr);
+    $q->execute() or query_err($conn,$qstr);
+} 
 

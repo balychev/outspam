@@ -5,11 +5,12 @@ use strict;
 use DBI;
 use Time::Local;
 use Net::Netmask;
+use Data::Dumper;
 
 use base qw(Exporter);
 
 our @EXPORT = qw ( initproc db_connect read_config date2sec rbookmark
-                   wbookmark query_err daemonize in_mynet in_netblock sec2date );
+                   wbookmark query_err daemonize in_mynet in_netblock sec2date subst_percent);
 #our @EXPORT = qw ( * );
 
 sub read_config {
@@ -144,13 +145,26 @@ sub rbookmark {
 }
 
 sub in_netblock {
-   (my $ip, my $netblocks = []) = @_;
-   return grep { $_ > 0 } map { $_->match($ip) } (@$netblocks);
+   (my $ip, my @netblocks) = @_;
+   return grep { $_ > 0 } map { $_->match($ip) } (@netblocks);
 }    
 
 sub in_mynet {
     (my $ip, my $conf) = @_;
     return grep { $_ > 0 } map { $_->match($ip) } (@{$conf->{'mynet'}});
+}    
+
+sub subst_percent {
+    (my $templ, my $param ) = @_;
+    if ( ref $param ) {
+        foreach my $i (@$param) {
+          $templ =~ s/\%/$i/;
+        }
+    }
+    else {
+        $templ =~ s/\%/$param/g;
+    }    
+    return $templ;
 }    
 
 1;

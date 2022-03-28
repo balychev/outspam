@@ -14,6 +14,11 @@ my $conf = {
   'access_lock_msg'=> 'ERROR:450: 4.3.2 Service temporarilly unavailable for suspicious user activity',
   'access_file' => '',
   'access_update_cmd' => '',
+  'domain' => '',  
+  'db' => '',
+  'dbhost' => '',
+  'dbuser'=> '',
+  'dbpassword' => '',
  };
 
 my $config_file = "$Bin/../etc/outspam.conf";
@@ -39,14 +44,28 @@ if ( $action eq 'USER_LOCK' && $option eq 'with-queue' ) {
     }    
 }    
 elsif ( $action eq 'USER_UNLOCK' ) {
-    if ( select_msgs($conf->{'hold_queue_dir'},$user,\@user_msgs) ) {
-        if ( $option eq 'with-queue' ) {
-            mv_msgs($conf->{'hold_queue_dir'},$conf->{'queue_dir'},\@user_msgs);
-        }
-        else {
-            rm_msgs($conf->{'hold_queue_dir'},\@user_msgs);
-        }    
-    }    
+    my $msgs_in_queue = select_msgs($conf->{'hold_queue_dir'},$user,\@user_msgs);
+    if ( $option eq 'with-queue' ) {
+        mv_msgs($conf->{'hold_queue_dir'},$conf->{'queue_dir'},\@user_msgs) if $msgs_in_queue;
+        spam_db($user,'restore');
+    }
+    else {
+        rm_msgs($conf->{'hold_queue_dir'},\@user_msgs) if $msgs_in_queue;
+        spam_db($user,'delete');
+    }
+}    
+
+sub spam_db {
+    (my $user, my $action) = @_;
+    my $qstr = "where sndr=\'$user\@$conf->{'domain'}\' and outgo=-1";
+    if ( $action eq 'delete' ) {
+       $qstr = "delete from maillog " . $qstr; }
+    elsif ( $action eq 'restore' ) {
+       $qstr =  "update maillog set outgo=1 " .$qstr }
+    else { return; }  
+    my $conn = db_connect($conf);
+    my $q = $conn->prepare($qstr);
+    $q->execute() or query_err($conn,$qstr);
 }    
 
 sub access_file {
@@ -113,13 +132,13 @@ sub select_msgs {
 
 sub argv {
    foreach my $a (@ARGV) {
-      $action = "USER_LOCK" if $a =~ /^--?l(?:ock)?$/; 
       $action = "help" if $a =~ /^--?h(?:elp)?$/; 
+      $action = "USER_LOCK" if $a =~ /^--?l(?:ock)?$/; 
       if ( $a =~ /^--*u(q)?(?:nlock)?/ ) {
          $action = "USER_UNLOCK" if $a =~ /^--*u(q)?(?:nlock)?$/;
          $option = "with-queue" if $1;
       }
-      $option = "with-queue" if $a =~ /^-q$|^--with-queue$/;
+      $option = "with-queue" if $a =~ /^-q|^--with-queue$/;
       $user = $a if $a =~ /^\w+$/;
    }
    help() unless defined($action) && defined($user);
@@ -128,7 +147,7 @@ sub argv {
 
 
 sub help {
-    print "Locks and unlocks user outgoing mail\n";
+    print "Locks and unlocks mail from user\n";
     print "usage: $0 {-l|--lock|-u|--unlock} [-q|--with-queue] user\n";
     exit;
 }    
