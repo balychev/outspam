@@ -36,7 +36,7 @@ read_config($config_file,$conf);
 
 my $conn = db_connect($conf);
 
-# msg_sec_test(); die;
+#msg_sec_test(); die;
 
 newdaemon(
             pidfile => $conf->{'outspamd_pid_file'},
@@ -53,6 +53,7 @@ sub gd_run
 
 sub gd_preconfig {
     read_config($config_file,$conf);
+    return ();
 }    
 
 # ====================================================
@@ -79,7 +80,7 @@ sub msg_sec_test {
             if ( $score > $conf->{'msgs_sec'}->{$sec} ) {
                system(subst_percent($conf->{'ban_action'},$r->{'sndr'})) || mark_ignore($r->{'sndr'},$sec);
                system( subst_percent( $conf->{'outspam_notify'}, [ $r->{'sndr'},$r->{'nsent'},$sec ] ) );
-            } else { print "\n"; }   
+            }   
         }
     }    
 }

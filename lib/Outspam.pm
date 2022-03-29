@@ -115,7 +115,7 @@ sub db_connect {
 sub query_err {
     (my $conn, my $q ) = @_;
     print "Error: query \"". $q ."\" failed\n";
-    die $conn->errstr;
+    warn $conn->errstr;
 }
 
 sub wbookmark {

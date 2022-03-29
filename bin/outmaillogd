@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+#!/usr/local/bin/perl
 
 use warnings;
 use strict;
@@ -33,7 +33,11 @@ my $conn = db_connect($conf);
 
 my %mail;
 
-# proc_main(); die;
+#while (1) {
+#  proc_main();
+#  sleep(8);
+#}
+#die;
 
 newdaemon(
             pidfile => $conf->{'outmail_pid_file'},
@@ -43,7 +47,7 @@ newdaemon(
 sub gd_run
      {
          while(1) {
-               sleep(8);
+               sleep(5);
                proc_main();
             }
      }
@@ -52,20 +56,23 @@ sub gd_run
 sub proc_main {
     (my $init, my $f) = initproc($conf);
 
+    print "init: ", Dumper($init->{'bm_end'});
+
     my @msgid;
     my $cur_last_msg;
     while ( <$f> ) {
         next unless / sm-mta\[\d+\]: /;
+        $cur_last_msg = $_;
+        if ( defined $init->{'bm_end'} ) {
+      	  undef $init->{'bm_end'} if $init->{'bm_end'} eq $cur_last_msg;
+	      next;
+        }    
         my $regex = '^\w+ \d+ (?:\d+:\d+:\d+) \S+ sm-mta\[\d+\]: (\S+): from=<([^>]+)>, '.
                     'size=(\d+), class=\S+, nrcpts=(\d+), .* relay=[^\[]*\[([\d\.]+)\]';
         if ( /$regex/i ) {
            my $sndr = lc $2;
            next if grep { $sndr =~ /$_/ } @{$conf->{'ignore_sender'}};
            my $msg = $1;
-           if ( defined $init->{'bm_end'} ) {
-              undef $init->{'bm_end'} if $init->{'bm_end'} eq $msg;
-              next;
-           }    
            $mail{$msg} = {
                            'sndr'=>$sndr, 'size'=>$3, 'nrcpts'=>$4, 'relay'=>$5,
                            'rcpts'=>{}, 'rcount'=>0 
@@ -85,13 +92,13 @@ sub proc_main {
            next if $mail{$msg}->{'outgo'} && $rcpt =~ /$from_filter/;
            $r->{$idx}->{'rcpt'}=$rcpt;
            ++$mail{$msg}->{'rcount'};
-           $cur_last_msg = $msg;
            print "$msg ",Dumper $mail{$msg} if $verbose;
 
         }    
     }
     close $f;
     
+    wbookmark($conf,$init,$cur_last_msg);
     return unless $cur_last_msg;
 
     foreach my $k (sort keys(%mail)) {
@@ -110,7 +117,6 @@ sub proc_main {
        }    
     }    
 
-    wbookmark($conf,$init,$cur_last_msg);
 }
 
 # ====================================================
