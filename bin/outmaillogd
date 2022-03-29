@@ -56,15 +56,16 @@ sub gd_run
 sub proc_main {
     (my $init, my $f) = initproc($conf);
 
-    print "init: ", Dumper($init->{'bm_end'});
+    #    print "init: ", Dumper($init->{'bm_end'});
 
     my @msgid;
-    my $cur_last_msg;
+    my $cur_last_line;
+    my $cur_first_msg;
     while ( <$f> ) {
         next unless / sm-mta\[\d+\]: /;
-        $cur_last_msg = $_;
+        $cur_last_line = $_;
         if ( defined $init->{'bm_end'} ) {
-      	  undef $init->{'bm_end'} if $init->{'bm_end'} eq $cur_last_msg;
+      	  undef $init->{'bm_end'} if $init->{'bm_end'} eq $cur_last_line;
 	      next;
         }    
         my $regex = '^\w+ \d+ (?:\d+:\d+:\d+) \S+ sm-mta\[\d+\]: (\S+): from=<([^>]+)>, '.
@@ -92,14 +93,15 @@ sub proc_main {
            next if $mail{$msg}->{'outgo'} && $rcpt =~ /$from_filter/;
            $r->{$idx}->{'rcpt'}=$rcpt;
            ++$mail{$msg}->{'rcount'};
+           $cur_first_msg = $msg unless $defined $cur_first_msg;
            print "$msg ",Dumper $mail{$msg} if $verbose;
 
         }    
     }
     close $f;
     
-    wbookmark($conf,$init,$cur_last_msg);
-    return unless $cur_last_msg;
+    wbookmark($conf,$init,$cur_last_line);
+    return unless defined $cur_first_msg;
 
     foreach my $k (sort keys(%mail)) {
        my $r =  $mail{$k}->{'rcpts'};
@@ -113,10 +115,11 @@ sub proc_main {
           if ( $query_str ) {
              my $query = $conn->prepare($query_str);
              $query->execute() or query_err($conn,$query_str); 
+             undef $mail{$k};
           }
        }    
     }    
-
+    # очистить бы $mail от великовозрастных
 }
 
 # ====================================================

@@ -47,22 +47,16 @@ elsif ( $action eq 'USER_UNLOCK' ) {
     my $msgs_in_queue = select_msgs($conf->{'hold_queue_dir'},$user,\@user_msgs);
     if ( $option eq 'with-queue' ) {
         mv_msgs($conf->{'hold_queue_dir'},$conf->{'queue_dir'},\@user_msgs) if $msgs_in_queue;
-        spam_db($user,'restore');
+        restore_spam($user);
     }
     else {
         rm_msgs($conf->{'hold_queue_dir'},\@user_msgs) if $msgs_in_queue;
-        spam_db($user,'delete');
     }
 }    
 
-sub spam_db {
-    (my $user, my $action) = @_;
-    my $qstr = "where sndr=\'$user\@$conf->{'domain'}\' and outgo=-1";
-    if ( $action eq 'delete' ) {
-       $qstr = "delete from maillog " . $qstr; }
-    elsif ( $action eq 'restore' ) {
-       $qstr =  "update maillog set outgo=1 " .$qstr }
-    else { return; }  
+sub restore_db {
+    my $user = shift;
+    my $qstr = "update maillog set outgo=1 where sndr=\'$user\@$conf->{'domain'}\' and outgo=-1";
     my $conn = db_connect($conf);
     my $q = $conn->prepare($qstr);
     $q->execute() or query_err($conn,$qstr);
