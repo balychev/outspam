@@ -1,0 +1,8 @@
+#!/bin/sh
+
+PATH=/usr/local/bin:/usr/bin/:$PATH
+
+for i in imaplogd outmaillogd outspamd; do
+   (ps ax | grep outmaillogd | grep -v grep > /dev/null ) || $i restart
+done
+

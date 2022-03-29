@@ -36,7 +36,10 @@ read_config($config_file,$conf);
 
 my $conn = db_connect($conf);
 
-#msg_sec_test(); die;
+if ( $verbose ) {
+  msg_sec_test();
+  die;
+}
 
 newdaemon(
             pidfile => $conf->{'outspamd_pid_file'},
@@ -78,8 +81,11 @@ sub msg_sec_test {
             my $score = $r->{'nsent'} * $coef * $ip_mistrust; 
             print "$r->{'sndr'} $r->{'nsent'} \($score\) \(ip_mistrust: $ip_mistrust\) require $conf->{'msgs_sec'}->{$sec}" if $verbose;
             if ( $score > $conf->{'msgs_sec'}->{$sec} ) {
-               system(subst_percent($conf->{'ban_action'},$r->{'sndr'})) || mark_ignore($r->{'sndr'},$sec);
-               system( subst_percent( $conf->{'outspam_notify'}, [ $r->{'sndr'},$r->{'nsent'},$sec ] ) );
+               my $ban_cmd = subst_percent($conf->{'ban_action'},$r->{'sndr'});
+               !system($ban_cmd) or warn "failed ==> \"$ban_cmd\" <== ban_cmd";
+               mark_ignore($r->{'sndr'},$sec);
+               my $notify_cmd = subst_percent( $conf->{'outspam_notify'}, [ $r->{'sndr'},$r->{'nsent'},$sec ] );
+               !system($notify_cmd) or warn "notification ==> \"$notify_cmd\" <== failed";
             }   
         }
     }    

@@ -93,7 +93,7 @@ sub proc_main {
            next if $mail{$msg}->{'outgo'} && $rcpt =~ /$from_filter/;
            $r->{$idx}->{'rcpt'}=$rcpt;
            ++$mail{$msg}->{'rcount'};
-           $cur_first_msg = $msg unless $defined $cur_first_msg;
+           $cur_first_msg = $msg unless defined $cur_first_msg;
            print "$msg ",Dumper $mail{$msg} if $verbose;
 
         }    
