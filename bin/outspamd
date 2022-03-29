@@ -51,10 +51,14 @@ sub gd_run
             }
      }
 
+sub gd_preconfig {
+    read_config($config_file,$conf);
+}    
+
 # ====================================================
 
 sub msg_sec_test {
-    foreach my $sec (sort { $a <=> $b } keys %{$conf->{'msgs_sec'}} ) {
+    foreach my $sec (sort { $b <=> $a } keys %{$conf->{'msgs_sec'}} ) {
         print "=== $sec\n" if $verbose;
         my $qstr = "select distinct replace(sndr,\'\@$conf->{'domain'}\',\'\') as sndr, count(rcpt) as nsent".
         " from maillog m1 where outgo=1 and unix_timestamp()-m1.time < " .$sec.
@@ -73,7 +77,7 @@ sub msg_sec_test {
             my $score = $r->{'nsent'} * $coef * $ip_mistrust; 
             print "$r->{'sndr'} $r->{'nsent'} \($score\) \(ip_mistrust: $ip_mistrust\) require $conf->{'msgs_sec'}->{$sec}" if $verbose;
             if ( $score > $conf->{'msgs_sec'}->{$sec} ) {
-               system(subst_percent($conf->{'ban_action'},$r->{'sndr'})) ||  mark_ignore($r->{'sndr'},$sec);
+               system(subst_percent($conf->{'ban_action'},$r->{'sndr'})) || mark_ignore($r->{'sndr'},$sec);
                system( subst_percent( $conf->{'outspam_notify'}, [ $r->{'sndr'},$r->{'nsent'},$sec ] ) );
             } else { print "\n"; }   
         }
