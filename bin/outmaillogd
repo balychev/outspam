@@ -35,6 +35,7 @@ my %mail;
 
 #while (1) {
 #  proc_main();
+#  die;
 #  sleep(8);
 #}
 #die;
@@ -56,8 +57,6 @@ sub gd_run
 sub proc_main {
     (my $init, my $f) = initproc($conf);
 
-    #    print "init: ", Dumper($init->{'bm_end'});
-
     my @msgid;
     my $cur_last_line;
     my $cur_first_msg;
@@ -68,8 +67,9 @@ sub proc_main {
       	  undef $init->{'bm_end'} if $init->{'bm_end'} eq $cur_last_line;
 	      next;
         }    
-        my $regex = '^\w+ \d+ (?:\d+:\d+:\d+) \S+ sm-mta\[\d+\]: (\S+): from=<([^>]+)>, '.
-                    'size=(\d+), class=\S+, nrcpts=(\d+), .* relay=[^\[]*\[([\d\.]+)\]';
+        my $regex = '^\w+ +\d+\s+(?:\d+:\d+:\d+) +\S+ +sm-mta\[\d+\]: +(\S+): +from=<([^>]+)>, +'.
+                    'size=(\d+), +class=\S+, +nrcpts=(\d+), .* relay=[^\[]*\[([\d\.]+)\]';
+        print "examine string: $_" if $verbose;
         if ( /$regex/i ) {
            my $sndr = lc $2;
            next if grep { $sndr =~ /$_/ } @{$conf->{'ignore_sender'}};
@@ -80,7 +80,7 @@ sub proc_main {
                          };
            $mail{$msg}->{'outgo'} = $mail{$msg}->{'sndr'} =~ /$from_filter/ ? 1 : 0;
         }    
-        elsif ( /^(\w+) (\d+) (\S+) \S+ \S+ (\S+): to=<([^>]+)>, .* stat=(.*)/i ) {
+        elsif ( /^(\w+) +(\d+) +(\S+) +\S+ +\S+ +(\S+): to=<([^>]+)>, .* stat=(.*)/i ) {
            my $msg = $4;
            next unless $mail{$msg};
            my $rcpt = lc $5;

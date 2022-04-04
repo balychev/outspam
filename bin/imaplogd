@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+#!/usr/local/bin/perl
 
 use warnings;
 use strict;
@@ -54,7 +54,7 @@ sub proc_main {
     my $cur_last_msg;
     while ( <$f> ) {
         next unless / User logged in /;
-        if ( /^(\w+) (\d+) (\S+) \S+ \w+\[(\d+)\]: .+ \[([\d+\.]+)\] (\w+) / ) {
+        if ( /^(\w+) +(\d+) +(\S+) +\S+ +\w+\[(\d+)\]: .+ \[([\d+\.]+)\] +(\w+) / ) {
            my $id = $4;
            if ( defined $init->{'bm_end'} ) {
               undef $init->{'bm_end'} if $init->{'bm_end'} eq $id;
