@@ -24,6 +24,8 @@ my $conf = {
 
 
 my $verbose = grep (/--verbose/, @ARGV) ? 1 : 0;
+my $debug = grep (/--debug/, @ARGV) ? 1 : 0;
+$verbose = 1 if $debug;
 
 my $config_file = "$Bin/../etc/outspam.conf";
 read_config($config_file,$conf);
@@ -69,7 +71,7 @@ sub proc_main {
         }    
         my $regex = '^\w+ +\d+\s+(?:\d+:\d+:\d+) +\S+ +sm-mta\[\d+\]: +(\S+): +from=<([^>]+)>, +'.
                     'size=(\d+), +class=\S+, +nrcpts=(\d+), .* relay=[^\[]*\[([\d\.]+)\]';
-        print "examine string: $_" if $verbose;
+        print "examine string: $_" if $debug;
         if ( /$regex/i ) {
            my $sndr = lc $2;
            next if grep { $sndr =~ /$_/ } @{$conf->{'ignore_sender'}};
@@ -79,6 +81,7 @@ sub proc_main {
                            'rcpts'=>{}, 'rcount'=>0 
                          };
            $mail{$msg}->{'outgo'} = $mail{$msg}->{'sndr'} =~ /$from_filter/ ? 1 : 0;
+           print "+++!!!+++ match\n" if $debug;
         }    
         elsif ( /^(\w+) +(\d+) +(\S+) +\S+ +\S+ +(\S+): to=<([^>]+)>, .* stat=(.*)/i ) {
            my $msg = $4;
@@ -95,11 +98,13 @@ sub proc_main {
            ++$mail{$msg}->{'rcount'};
            $cur_first_msg = $msg unless defined $cur_first_msg;
            print "$msg ",Dumper $mail{$msg} if $verbose;
-
         }    
+        else {
+           print "--!!!-- not match --!!!--\n" if $debug;
+        }
     }
     close $f;
-    
+
     wbookmark($conf,$init,$cur_last_line);
     return unless defined $cur_first_msg;
 
@@ -112,12 +117,13 @@ sub proc_main {
              $r->{$i}->{$_} = $mail{$k}->{$_}; 
           }    
           my $query_str = mk_ins_query($k,$r->{$i});
+          print "query_str: $query_str\n" if $debug;
           if ( $query_str ) {
              my $query = $conn->prepare($query_str);
              $query->execute() or query_err($conn,$query_str); 
-             undef $mail{$k};
           }
        }    
+       undef $mail{$k};
     }    
     # очистить бы $mail от великовозрастных
 }
@@ -138,6 +144,10 @@ sub mk_ins_query {
     foreach my $k (keys (%$h)) {
         $q .= ", " if $q;
         $q .= "$k=\'$h->{$k}\'";
+        if ( $debug && ! defined ($h->{$k}) ) {
+           print "**** undefinded in msg $msg **** : ";
+           print Dumper($h);
+        }
     }
     $q = "insert maillog set msg=\'$msg\', ".$q. " on duplicate key update time=$h->{'time'}" if $q;
     return $q;
