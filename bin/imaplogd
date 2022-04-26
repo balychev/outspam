@@ -31,6 +31,11 @@ read_config($config_file,$conf);
 
 my $conn = db_connect($conf);
 
+if ( $verbose ) {
+   proc_main($conf);
+   die;
+}
+
 newdaemon(
             pidfile => $conf->{'imap_pid_file'},
             configfile => $config_file,
@@ -40,8 +45,8 @@ newdaemon(
 sub gd_run
      {
          while(1) {
-               sleep(5);
                proc_main($conf);              
+               sleep(5);
             }
      }
 
@@ -54,7 +59,8 @@ sub proc_main {
     my $cur_last_msg;
     while ( <$f> ) {
         next unless / User logged in /;
-        if ( /^(\w+) +(\d+) +(\S+) +\S+ +\w+\[(\d+)\]: .+ \[([\d+\.]+)\] +(\w+) / ) {
+# Apr 26 14:42:08 forum pop3s[8856]: login: mail-qv1-f25.google.com [209.85.219.25] v.osadchii plaintext+TLS User logged in SESSIONID=<ac.ru-1650973327-8856-1-18232435259722640696>
+        if ( /^(\w+) +(\d+) +(\S+) +\S+ +\w+\[(\d+)\]: .+ \[([\d+\.]+)\] +(\S+) / ) {
            my $id = $4;
            if ( defined $init->{'bm_end'} ) {
               undef $init->{'bm_end'} if $init->{'bm_end'} eq $id;
@@ -71,7 +77,10 @@ sub proc_main {
               print "system( $action )\n";
            }    
            print "$id ",Dumper $mail{$id} if $verbose;
-        }    
+        }
+	    else {
+           print "--- Not match: $_" if $verbose;
+        }
     }
     close $f;
     return unless defined $cur_last_msg;
