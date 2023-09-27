@@ -5,7 +5,7 @@ use strict;
 use Data::Dumper;
 use DBI;
 use FindBin qw($Bin $Script);
-#use Daemon::Generic;
+use Daemon::Generic;
 
 use lib "$Bin/../lib";
 use Outspam;
