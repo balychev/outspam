@@ -33,4 +33,5 @@ while ( my $r  = $q->fetchrow_hashref() ) {
           sec2date($r->{'time'}),$r->{'relay'},$r->{'sndr'},$r->{'rcpt'},$r->{'stat'});
 }    
 
-
+STDOUT->flush();
+$conn->disconnect();

@@ -35,4 +35,6 @@ while ( my $r = $q->fetchrow_hashref() ) {
     print sprintf("%15s %15s %s\n",sec2date($r->{'time'}),$r->{'host'},$r->{'user'});
 }    
 
+STDOUT->flush();
+$conn->disconnect();
 
